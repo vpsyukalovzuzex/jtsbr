@@ -110,9 +110,9 @@ func (b *Broker) addStreamIfNeeded(channel string, queue string) (*nats.StreamIn
 		if err != nil {
 			return nil, fmt.Errorf("add stream if needed, add stream: %v", err)
 		}
-	}
 
-	log.Println("stream added")
+		log.Println("stream added")
+	}
 
 	return stream, nil
 }
