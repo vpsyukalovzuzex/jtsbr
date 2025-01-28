@@ -51,7 +51,7 @@ func (b *Broker) Produce(
 	queue string,
 	object any,
 ) error {
-	if _, err := b.addStreamIfNeeded(channel); err != nil {
+	if _, err := b.addStreamIfNeeded(channel, queue); err != nil {
 		return fmt.Errorf("produce, add stream if needed: %v", err)
 	}
 
@@ -73,7 +73,7 @@ func (b *Broker) Consume(
 	queue string,
 	action func(context.Context, []byte),
 ) error {
-	if _, err := b.addStreamIfNeeded(channel); err != nil {
+	if _, err := b.addStreamIfNeeded(channel, queue); err != nil {
 		return fmt.Errorf("consume, add stream if needed: %v", err)
 	}
 
@@ -91,16 +91,16 @@ func (b *Broker) Consume(
 	return nil
 }
 
-func (b *Broker) addStreamIfNeeded(channel string) (*nats.StreamInfo, error) {
+func (b *Broker) addStreamIfNeeded(channel string, queue string) (*nats.StreamInfo, error) {
 	stream, err := b.js.StreamInfo(channel)
 	if err != nil {
-		log.Println(err)
+		log.Println(fmt.Errorf("add stream if needed, stream info: %v", err))
 	}
 
 	if stream == nil {
 		return b.js.AddStream(&nats.StreamConfig{
 			Name:     channel,
-			Subjects: []string{channel},
+			Subjects: []string{fmt.Sprintf("%s.%s", channel, queue)},
 		})
 	}
 
