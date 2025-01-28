@@ -7,12 +7,11 @@ import (
 	"log"
 
 	"github.com/nats-io/nats.go"
-	"github.com/nats-io/nats.go/jetstream"
 )
 
 type Broker struct {
 	conn *nats.Conn
-	js   jetstream.JetStream
+	js   nats.JetStreamContext
 }
 
 func New() *Broker {
@@ -22,7 +21,7 @@ func New() *Broker {
 func (b *Broker) Start(params map[string]any) error {
 	url, ok := params["url"].(string)
 	if !ok {
-		return fmt.Errorf("invalid params")
+		return fmt.Errorf("invalid params - no url")
 	}
 
 	conn, err := nats.Connect(url)
@@ -31,7 +30,7 @@ func (b *Broker) Start(params map[string]any) error {
 	}
 	b.conn = conn
 
-	js, err := jetstream.New(conn)
+	js, err := conn.JetStream()
 	if err != nil {
 		return fmt.Errorf("start, new jet stream: %v", err)
 	}
@@ -52,7 +51,7 @@ func (b *Broker) Produce(
 	queue string,
 	object any,
 ) error {
-	if _, err := b.addStreamIfNeeded(ctx, channel); err != nil {
+	if _, err := b.addStreamIfNeeded(channel); err != nil {
 		return fmt.Errorf("produce, add stream if needed: %v", err)
 	}
 
@@ -61,7 +60,7 @@ func (b *Broker) Produce(
 		return fmt.Errorf("produce, marshal: %v", err)
 	}
 
-	if _, err := b.js.Publish(ctx, fmt.Sprintf("%s.%s", channel, queue), body); err != nil {
+	if _, err := b.js.Publish(fmt.Sprintf("%s.%s", channel, queue), body); err != nil {
 		return fmt.Errorf("produce, publish: %v", err)
 	}
 
@@ -74,54 +73,36 @@ func (b *Broker) Consume(
 	queue string,
 	action func(context.Context, []byte),
 ) error {
-	s, err := b.addStreamIfNeeded(ctx, channel)
-	if err != nil {
+	if _, err := b.addStreamIfNeeded(channel); err != nil {
 		return fmt.Errorf("consume, add stream if needed: %v", err)
 	}
 
-	c, err := s.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
-		Durable:   "CONS",
-		AckPolicy: jetstream.AckExplicitPolicy,
-	})
-	if err != nil {
-		return fmt.Errorf("consume, create or update consumer: %v", err)
+	if _, err := b.js.Subscribe(
+		fmt.Sprintf("%s.%s", channel, queue),
+		func(msg *nats.Msg) {
+			msg.Ack()
+			action(ctx, msg.Data)
+		},
+		nats.DeliverLast(),
+	); err != nil {
+		return fmt.Errorf("consume, subscribe: %v", err)
 	}
-
-	go b.listenQueue(ctx, c, action)
 
 	return nil
 }
 
-func (b *Broker) addStreamIfNeeded(ctx context.Context, channel string) (jetstream.Stream, error) {
-	return b.js.CreateStream(ctx, jetstream.StreamConfig{
-		Name:     channel,
-		Subjects: []string{fmt.Sprintf("%s.*", channel)},
-	})
-}
-
-func (b *Broker) listenQueue(
-	ctx context.Context,
-	consume jetstream.Consumer,
-	block func(context.Context, []byte),
-) error {
-	msgs, err := consume.Messages()
+func (b *Broker) addStreamIfNeeded(channel string) (*nats.StreamInfo, error) {
+	stream, err := b.js.StreamInfo(channel)
 	if err != nil {
-		return fmt.Errorf("listen queue, messages: %v", err)
+		log.Println(err)
 	}
-	defer msgs.Stop()
 
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		default:
-			msg, err := msgs.Next()
-			if err != nil {
-				log.Println("listen queue, next error:", err)
-				continue
-			}
-
-			block(ctx, msg.Data())
-		}
+	if stream == nil {
+		return b.js.AddStream(&nats.StreamConfig{
+			Name:     channel,
+			Subjects: []string{channel},
+		})
 	}
+
+	return stream, nil
 }
