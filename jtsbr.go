@@ -2,7 +2,6 @@ package jtsbr
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -26,32 +25,7 @@ func (b *Broker) Start(params map[string]any) error {
 		return fmt.Errorf("invalid params")
 	}
 
-	certFile, ok := params["cert_file"].(string)
-	if !ok {
-		return fmt.Errorf("invalid params")
-	}
-
-	keyFile, ok := params["key_file"].(string)
-	if !ok {
-		return fmt.Errorf("invalid params")
-	}
-
-	rootCAs, ok := params["root_ca_s"].(string)
-	if !ok {
-		return fmt.Errorf("invalid params")
-	}
-
-	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
-	if err != nil {
-		return fmt.Errorf("start, load x509 key pair: %v", err)
-	}
-
-	config := tls.Config{
-		Certificates: []tls.Certificate{cert},
-		MinVersion:   tls.VersionTLS12,
-	}
-
-	conn, err := nats.Connect(url, nats.Secure(&config), nats.RootCAs(rootCAs))
+	conn, err := nats.Connect(url)
 	if err != nil {
 		return fmt.Errorf("start, nats connect: %v", err)
 	}
