@@ -51,6 +51,8 @@ func (b *Broker) Produce(
 	queue string,
 	object any,
 ) error {
+	log.Println("produce:", fmt.Sprintf("%s.%s", channel, queue))
+
 	if _, err := b.addStreamIfNeeded(channel, queue); err != nil {
 		return fmt.Errorf("produce, add stream if needed: %v", err)
 	}
@@ -73,6 +75,8 @@ func (b *Broker) Consume(
 	queue string,
 	action func(context.Context, []byte),
 ) error {
+	log.Println("consume:", fmt.Sprintf("%s.%s", channel, queue))
+
 	if _, err := b.addStreamIfNeeded(channel, queue); err != nil {
 		return fmt.Errorf("consume, add stream if needed: %v", err)
 	}
