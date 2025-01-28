@@ -87,7 +87,7 @@ func (b *Broker) Consume(
 			msg.Ack()
 			action(ctx, msg.Data)
 		},
-		nats.DeliverLast(),
+		nats.DeliverNew(),
 	); err != nil {
 		return fmt.Errorf("consume, subscribe: %v", err)
 	}
@@ -102,11 +102,17 @@ func (b *Broker) addStreamIfNeeded(channel string, queue string) (*nats.StreamIn
 	}
 
 	if stream == nil {
-		return b.js.AddStream(&nats.StreamConfig{
+		var err error
+		stream, err = b.js.AddStream(&nats.StreamConfig{
 			Name:     channel,
 			Subjects: []string{fmt.Sprintf("%s.%s", channel, queue)},
 		})
+		if err != nil {
+			return nil, fmt.Errorf("add stream if needed, add stream: %v", err)
+		}
 	}
+
+	log.Println("stream added")
 
 	return stream, nil
 }
